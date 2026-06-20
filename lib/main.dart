@@ -43,7 +43,11 @@ void main() async {
   await Firebase.initializeApp();
   // await ThemeController.loadTheme(); // Removed
   // Initialize Notifications
-  await NotificationService().initialize();
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint("Failed to initialize Notification Service: $e");
+  }
 
   // Initialize Date Formatting for Malay
   await initializeDateFormatting('ms_MY', null);

@@ -27,91 +27,99 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // 1. Request Permissions
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    try {
+      // 1. Request Permissions
+      NotificationSettings settings = await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('User granted permission');
-    } else {
-      debugPrint('User declined or has not accepted permission');
-      return;
-    }
-
-    // 2. Setup Local Notifications (for foreground popups)
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-
-    await _localNotifications.initialize(initializationSettings);
-
-    // 3. Create Android Channel (High Importance)
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'high_importance_channel', // id
-      'High Importance Notifications', // title
-      description: 'This channel is used for important notifications.',
-      importance: Importance.max,
-    );
-
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
-
-    // 4. Foreground Message Handler
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      // 🔽 check toggle preference
-      final prefs = await SharedPreferences.getInstance();
-      final enabled = prefs.getBool('notificationsEnabled') ?? true;
-      if (!enabled) return;
-
-      RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
-
-      // If app is in foreground, show local notification manually
-      if (notification != null && android != null) {
-        _localNotifications.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              channel.id,
-              channel.name,
-              channelDescription: channel.description,
-              icon: android.smallIcon,
-              priority: Priority.high,
-              importance: Importance.max,
-            ),
-          ),
-        );
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('User granted permission');
+      } else {
+        debugPrint('User declined or has not accepted permission');
+        return;
       }
-    });
 
-    // 5. Background Handler Setup
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // 2. Setup Local Notifications (for foreground popups)
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // 6. Subscribe to broadcast topic
-    await _firebaseMessaging.subscribeToTopic('all_users');
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
 
-    _isInitialized = true;
+      await _localNotifications.initialize(initializationSettings);
+
+      // 3. Create Android Channel (High Importance)
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'high_importance_channel', // id
+        'High Importance Notifications', // title
+        description: 'This channel is used for important notifications.',
+        importance: Importance.max,
+      );
+
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
+
+      // 4. Foreground Message Handler
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+        // 🔽 check toggle preference
+        final prefs = await SharedPreferences.getInstance();
+        final enabled = prefs.getBool('notificationsEnabled') ?? true;
+        if (!enabled) return;
+
+        RemoteNotification? notification = message.notification;
+        AndroidNotification? android = message.notification?.android;
+
+        // If app is in foreground, show local notification manually
+        if (notification != null && android != null) {
+          _localNotifications.show(
+            notification.hashCode,
+            notification.title,
+            notification.body,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                channel.id,
+                channel.name,
+                channelDescription: channel.description,
+                icon: android.smallIcon,
+                priority: Priority.high,
+                importance: Importance.max,
+              ),
+            ),
+          );
+        }
+      });
+
+      // 5. Background Handler Setup
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+      // 6. Subscribe to broadcast topic
+      await _firebaseMessaging.subscribeToTopic('all_users');
+
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('Error initializing notification service: $e');
+    }
   }
 
   // 💾 SAVE TOKEN
   Future<void> saveTokenToDatabase() async {
-    String? token = await _firebaseMessaging.getToken();
-    final user = FirebaseAuth.instance.currentUser;
+    try {
+      String? token = await _firebaseMessaging.getToken();
+      final user = FirebaseAuth.instance.currentUser;
 
-    if (user != null && token != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'fcmToken': token,
-      });
-      debugPrint("FCM Token Saved: $token");
+      if (user != null && token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'fcmToken': token,
+        });
+        debugPrint("FCM Token Saved: $token");
+      }
+    } catch (e) {
+      debugPrint("Error saving FCM Token to database: $e");
     }
   }
 
